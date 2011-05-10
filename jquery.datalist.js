@@ -50,6 +50,12 @@
         return parseInt(n, 10) || 0;
     }
 
+    function zIndex() {
+        return $('*').map(function () {
+            return an($(this).css('z-index'));
+        }).get().max();
+    }
+
     function buildOptions($this, ul, opts) {
         //otherwise, build the structure
         var lis = [];
@@ -75,13 +81,13 @@
     function search($this, lis, context) {
         var value = $this.val().toLowerCase(),
             matches = context.matches || (context.matches = lis),
-            list = value.indexOf(context.last) === 0 ? matches : lis;
+            list = value.length > 0 && value.indexOf(context.last) === 0 ? matches : lis;
 
         if (context.last === value) return;
         context.last = value;
 
         context.matches = filter.call(list, function (li) {
-            if (li.dataText.indexOf(value) > -1) {
+            if (value.length === 0 || li.dataText.indexOf(value) > -1) {
                 li.style.display = 'block';
                 return true;
             }
@@ -94,13 +100,16 @@
         corner = corner || 'tl';
         elm.css({
             top: off.top + (corner.indexOf('b') > -1 ? relativeTo.outerHeight() : -1) + an(relativeTo.css('margin-top')),
-            left: off.left + (corner.indexOf('r') > -1 ? relativeTo.outerWidth() : 0) + an(relativeTo.css('margin-left'))
+            left: off.left + (corner.indexOf('r') > -1 ? relativeTo.outerWidth() : 0) + an(relativeTo.css('margin-left')),
+            'z-index': zIndex() + 100
         });
     }
 
-    $.fn.datalist = function () {
+    $.fn.datalist = function (options) {
+        options = $.extend({}, { native_support: native_support, url: '', width: 0 }, options);
+
         //first test for native placeholder support before continuing
-        return native_support ? this : this.each(function () {
+        return options.native_support ? this : this.each(function () {
             //local vars
             var $this = $(this), lis, tmrHide,
             //the main guts of the plugin
@@ -110,9 +119,9 @@
             //wrapper stuffs
                 width = $this.outerWidth() - 2, // + sum.call($this, 'border-left', 'border-right', 'padding-left', 'padding-right'),
                 height = $this.height(),
-                ul = $("<ul>", { "class": "datalist",
+                ul = $("<ul>", {
                     "css": {
-                        "width": width,
+                        "width": options.width || width,
                         'position': $this.css('position') === 'fixed' ? 'fixed' : 'absolute',
                         'margin': 0,
                         'padding': 0,
@@ -121,7 +130,6 @@
                         '-moz-box-shadow': '0px 2px 3px #ccc',
                         '-webkit-box-shadow': '0px 2px 3px #ccc',
                         'box-shadow': '0px 2px 3px #ccc',
-                        'z-index': 99,
                         'cursor': 'default',
                         'background-color': 'Menu',
                         'color': 'MenuText',
@@ -129,17 +137,18 @@
                         'overflow': 'auto',
                         'font-size': $this.css('font-size'),
                         'font-family': $this.css('font-family'),
-                        'line-height': $this.css('line-height')
+                        'line-height': $this.css('line-height'),
+                        'font-weight': 'normal'
                     }
                 });
 
             $this.removeAttr('list').attr('autocomplete', 'off'); //disable native support when it's insufficient
 
             //continue if matching datalist isn't found
-            if (!datalist.length) return; //continue
+            if (!datalist.length && !options.url) return; //continue
 
-            if (datalist.attr('data')) {
-                $.get(datalist.attr('data')).success(function (ret) {
+            if (options.url || datalist.attr('data')) {
+                $.get(options.url || datalist.attr('data')).success(function (ret) {
                     lis = buildOptions($this, ul, $(ret).find('option'));
                 });
             } else lis = buildOptions($this, ul, opts);
@@ -160,19 +169,18 @@
                 }).bind('focus show-now', function (e) {
                     $this.trigger('cancel-hide');
                     position(ul, $this, 'bl');
-                    if (e.type === 'focus') $this.keyup();
+                    if (e.type === 'focus') $this.trigger('search');
                     ul.show();
                 })
                 .blur(function () { $this.trigger('start-hide'); })
-                .keyup(function (e) {
-                    if (e.keyCode > 40) {
-                        if (!ul.is(':visible')) $this.trigger('show-now');
-                        clearTimeout(searchContext.tmr);
-                        searchContext.tmr = setTimeout(function () {
-                            search($this, lis, searchContext);
-                        }, 200);
-                    }
-                }).keydown(function (e) {
+                .bind('keyup search', function () {
+                    if (!ul.is(':visible')) $this.trigger('show-now');
+                    clearTimeout(searchContext.tmr);
+                    searchContext.tmr = setTimeout(function () {
+                        search($this, lis, searchContext);
+                    }, 200);
+                })
+                .keydown(function (e) {
                     if (e.keyCode <= 40) {
                         var selected = ul.find('li.selected:visible');
                         if (e.keyCode == 38) { //up
@@ -236,7 +244,7 @@
                 }).removeClass('selected');
 
             }).bind('scroll', function () {
-                $this.trigger('show-now');
+                $this.trigger('focus');
             });
         });
     };
