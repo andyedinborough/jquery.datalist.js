@@ -12,80 +12,235 @@
 /* 
 <input type="search" list="suggestions">
 <datalist id="suggestions">
-  <!--[if !IE]><!-->
-  <select><!--<![endif]-->
-    <option label="DM" value="Depeche Mode">
-    <option label="Moz" value="Morrissey">
-    <option label="NO" value="New Order">
-    <option label="TC" value="The Cure">
-  <!--[if !IE]><!-->
-  </select><!--<![endif]-->
+<!--[if !IE]><!-->
+<select><!--<![endif]-->
+<option label="DM" value="Depeche Mode">
+<option label="Moz" value="Morrissey">
+<option label="NO" value="New Order">
+<option label="TC" value="The Cure">
+<!--[if !IE]><!-->
+</select><!--<![endif]-->
 </datalist>
 */
+(function (window, $) {
+    var document = window.document,
+        native_support =
+            !!('data' in document.createElement('datalist')) && //bye bye Opera
+            !!window.HTMLDataListElement &&
+            !!('list' in document.createElement('input')),
+            some = Array.prototype.some || function (func) {
+                var ret;
+                for (var i = 0, ii = this.length; i < ii; i++) {
+                    if ((ret = func(this[i], i, this))) {
+                        return ret;
+                    }
+                }
+                return false;
+            },
+            filter = Array.prototype.filter || function (func) {
+                var ret = [];
+                for (var i = 0, ii = this.length, iii; i < ii; i++) {
+                    if (func(iii = this[i], i, this)) ret.push(iii);
+                }
+                return ret;
+            };
 
-$.fn.datalist = function() {
-  
-  //first test for native placeholder support before continuing
-  return ((typeof this[0].list === 'object' ) && (document.createElement('datalist') && !!window.HTMLDataListElement)) ? this : this.each(function() {
-    //local vars
-    var $this = $(this),
-        //the main guts of the plugin
-        datalist = $('#' + $this.attr('list')),
-        opts = datalist.find('option'),
-        
-        //wrapper stuffs
-        width = $this.width(),
-        height = $this.height(),
-        ul = $("<ul>", {"class": "datalist", "width": width, "css": 
-          {'position': 'absolute', 
-           'left': 0, 
-           'top': height + 6, 
-           'margin': 0, 
-           'padding': '0 2px',
-           'list-style': 'none',
-           'border': '1px solid #ccc', 
-           '-moz-box-shadow': '0px 2px 3px #ccc', 
-           '-webkit-box-shadow': '0px 2px 3px #ccc', 
-           'box-shadow': '0px 2px 3px #ccc', 
-           'z-index':99, 
-           'background':'#fff', 
-           'cursor':'default'}
-          }),
-        wrapper = $('<div>').css('position', 'relative');
-        
-    //return this if matching datalist isn't found
-    //to be polite if there's any chaining
-    if (!datalist.length) {
-        return this;
-    } else {
-    //otherwise, build the structure
-      opts.each(function(i, opt) {
-        $('<li>')
-          .append('<span class="value">'+opt.value+'</span>')
-          .append('<span class="label" style="float:right">'+opt.label+'</span>')
-          .appendTo(ul);
-      });
+    //return a number
+    function an(n) {
+        return parseInt(n, 10) || 0;
+    }
+
+    function buildOptions($this, ul, opts) {
+        //otherwise, build the structure
+        var lis = [];
+        opts.each(function (i) {
+            var opt = $(this), value = opt.attr('value') || opt.text(), label = opt.attr('label') || opt.text(), li;
+            lis.push(li = $('<li style="padding: 2px; white-space: nowrap">')
+                .append('<span class="value">' + value + '</span>')
+                .append($('<span>', { 'css': {
+                    opacity: 0.8,
+                    'font-style': 'italic',
+                    'float': 'right',
+                    display: label === value ? 'none' : 'inline'
+                }
+                }).text(label))
+                .attr('title', label || value || '')
+                .appendTo(ul)[0]);
+            li.dataText = (label + ' ' + value).toLowerCase();
+        });
+
+        return lis;
+    }
+
+    function search($this, lis, context) {
+        var value = $this.val().toLowerCase(),
+            matches = context.matches || (context.matches = lis),
+            list = value.indexOf(context.last) === 0 ? matches : lis;
+
+        if (context.last === value) return;
+        context.last = value;
+
+        context.matches = filter.call(list, function (li) {
+            if (li.dataText.indexOf(value) > -1) {
+                li.style.display = 'block';
+                return true;
+            }
+            li.style.display = 'none';
+        });
+    }
+
+    function position(elm, relativeTo, corner) {
+        var off = relativeTo.position();
+        corner = corner || 'tl';
+        elm.css({
+            top: off.top + (corner.indexOf('b') > -1 ? relativeTo.outerHeight() : -1) + an(relativeTo.css('margin-top')),
+            left: off.left + (corner.indexOf('r') > -1 ? relativeTo.outerWidth() : 0) + an(relativeTo.css('margin-left'))
+        });
+    }
+
+    $.fn.datalist = function () {
+        //first test for native placeholder support before continuing
+        return native_support ? this : this.each(function () {
+            //local vars
+            var $this = $(this), lis, tmrHide,
+            //the main guts of the plugin
+                datalist = $(document.getElementById($this.attr('list'))),
+                opts = datalist.find('option'),
+
+            //wrapper stuffs
+                width = $this.outerWidth() - 2, // + sum.call($this, 'border-left', 'border-right', 'padding-left', 'padding-right'),
+                height = $this.height(),
+                ul = $("<ul>", { "class": "datalist",
+                    "css": {
+                        "width": width,
+                        'position': $this.css('position') === 'fixed' ? 'fixed' : 'absolute',
+                        'margin': 0,
+                        'padding': 0,
+                        'list-style': 'none',
+                        'border': '1px solid #ccc',
+                        '-moz-box-shadow': '0px 2px 3px #ccc',
+                        '-webkit-box-shadow': '0px 2px 3px #ccc',
+                        'box-shadow': '0px 2px 3px #ccc',
+                        'z-index': 99,
+                        'cursor': 'default',
+                        'background-color': 'Menu',
+                        'color': 'MenuText',
+                        'max-height': 130,
+                        'overflow': 'auto',
+                        'font-size': $this.css('font-size'),
+                        'font-family': $this.css('font-family'),
+                        'line-height': $this.css('line-height')
+                    }
+                });
+
+            $this.removeAttr('list').attr('autocomplete', 'off'); //disable native support when it's insufficient
+
+            //continue if matching datalist isn't found
+            if (!datalist.length) return; //continue
+
+            if (datalist.attr('data')) {
+                $.get(datalist.attr('data')).success(function (ret) {
+                    lis = buildOptions($this, ul, $(ret).find('option'));
+                });
+            } else lis = buildOptions($this, ul, opts);
+
+            //stick the stuff in and hide it
+            ul.hide().insertAfter($this);
+
+            var searchContext = { last: '' };
+            $this
+                .bind('start-hide', function () {
+                    $this.trigger('cancel-hide');
+                    tmrHide = setTimeout(function () { $this.trigger('hide-now'); }, 300);
+                })
+                .bind('cancel-hide', function () {
+                    clearTimeout(tmrHide);
+                }).bind('hide-now', function () {
+                    ul.hide();
+                }).bind('focus show-now', function (e) {
+                    $this.trigger('cancel-hide');
+                    position(ul, $this, 'bl');
+                    if (e.type === 'focus') $this.keyup();
+                    ul.show();
+                })
+                .blur(function () { $this.trigger('start-hide'); })
+                .keyup(function (e) {
+                    if (e.keyCode > 40) {
+                        if (!ul.is(':visible')) $this.trigger('show-now');
+                        clearTimeout(searchContext.tmr);
+                        searchContext.tmr = setTimeout(function () {
+                            search($this, lis, searchContext);
+                        }, 200);
+                    }
+                }).keydown(function (e) {
+                    if (e.keyCode <= 40) {
+                        var selected = ul.find('li.selected:visible');
+                        if (e.keyCode == 38) { //up
+                            e.preventDefault();
+                            if (!ul.is(':visible')) $this.trigger('show-now');
+                            if (selected.length) {
+                                selected = selected
+                                .trigger('mouseleave')
+                                .prev(':visible');
+                            }
+
+                        } else if (e.keyCode === 40) { //down
+                            e.preventDefault();
+                            if (!ul.is(':visible')) $this.trigger('show-now');
+                            if (selected.length) {
+                                selected = selected
+                                .trigger('mouseleave')
+                                .next(':visible');
+                            } else {
+                                selected = ul.find('li:visible:first')
+                                .trigger('mouseenter');
+                            }
+
+                        } else if (e.keyCode === 27 && ul.is(':visible')) {
+                            e.preventDefault();
+                            $this.trigger('hide-now');
+
+                        } else if (e.keyCode === 13 && ul.is(':visible')) {
+                            e.preventDefault();
+                            selected.trigger('click');
+                        }
+
+                        if (selected.length) {
+                            var top = selected[0].offsetTop, scrollTop = ul.scrollTop(), ulHeight = ul.height(), height = selected.height();
+                            if (scrollTop + ulHeight < top + height * 2.5) {
+                                ul.stop().animate({ scrollTop: top - ulHeight + height * 2.5 }, 50);
+                            } else if (scrollTop > top) {
+                                ul.stop().animate({ scrollTop: top - height }, 50);
+                            }
+                            selected.trigger('mouseenter');
+                        }
+                    }
+                });
+
+            //set value of input to clicked option
+            ul.delegate('li', 'click', function () {
+                var value = $(this).find('span.value').text();
+                $this.val(value).trigger('hide-now');
+
+            }).delegate('li', 'mouseenter', function () {
+                ul.find('.selected').removeClass('selected');
+                $(this).css({
+                    'background-color': 'Highlight',
+                    'color': 'HighlightText'
+                }).addClass('selected');
+
+            }).delegate('li', 'mouseleave', function () {
+                $(this).css({
+                    'background-color': 'Menu',
+                    'color': 'MenuText'
+                }).removeClass('selected');
+
+            }).bind('scroll', function () {
+                $this.trigger('show-now');
+            });
+        });
     };
-    
-    //stick the stuff in and hide it
-    $this.wrap(wrapper);
-    ul.hide().insertAfter($this);
-    
-    //show it on focus
-    $this.focus(function(){
-      ul.show(); 
-    });
-    
-    //hide it on blur
-    $this.blur(function(){
-      ul.hide();
-    });
-    
-    //set value of input to clicked option
-    var lis = $this.next().find('li');
-    lis.mousedown(function(){
-      var value = $(this).find('span.value').text();
-      $this.val(value); 
-    });
-  });
-};
+
+    $(function () { $('[list]').datalist(); });
+
+})(window, jQuery);
