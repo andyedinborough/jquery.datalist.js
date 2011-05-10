@@ -111,7 +111,7 @@
         //first test for native placeholder support before continuing
         return options.native_support ? this : this.each(function () {
             //local vars
-            var $this = $(this), lis, tmrHide, tmrScroll,
+            var $this = $(this), lis, tmrHide,
             //the main guts of the plugin
                 datalist = $(document.getElementById($this.attr('list'))),
                 opts = datalist.find('option'),
@@ -164,22 +164,28 @@
                 })
                 .bind('cancel-hide', function () {
                     clearTimeout(tmrHide);
-                }).bind('hide-now', function () {
+
+                }).bind('hide-now', function (e) {
                     ul.hide();
+                    if (e.refocus) $this.trigger({ type: 'focus', noshow: true });
+
                 }).bind('focus show-now', function (e) {
+                    if (e.noshow) return;
                     $this.trigger('cancel-hide');
                     position(ul, $this, 'bl');
                     if (e.type === 'focus') $this.trigger('search');
                     ul.show();
                 })
+
                 .blur(function () { $this.trigger('start-hide'); })
                 .bind('keyup search', function (e) {
-                    if (e.keyCode && $.inArray(e.keyCode, [27, 10, 13, 38, 40]) > -1) return;
+                    if (e.keyCode && $.inArray(e.keyCode, [27, 10, 13, 38, 40, 9]) > -1) return;
                     if (!ul.is(':visible')) $this.trigger('show-now');
                     clearTimeout(searchContext.tmr);
                     searchContext.tmr = setTimeout(function () {
                         search($this, lis, searchContext);
                     }, 200);
+
                 })
                 .keydown(function (e) {
                     if (e.keyCode <= 40) {
@@ -207,9 +213,9 @@
 
                         } else if (e.keyCode === 27 && ul.is(':visible')) {
                             e.preventDefault();
-                            $this.trigger('hide-now');
+                            $this.trigger({ type: 'hide-now', refocus: true });
 
-                        } else if (e.keyCode === 13 && ul.is(':visible')) {
+                        } else if (e.keyCode === 13 || e.keyCode === 9 && ul.is(':visible')) {
                             e.preventDefault();
                             selected.trigger('click');
                         }
@@ -229,7 +235,7 @@
             //set value of input to clicked option
             ul.delegate('li', 'click', function () {
                 var value = $(this).find('span.value').text();
-                $this.val(value).trigger('hide-now');
+                $this.val(value).trigger({ type: 'hide-now', refocus: true });
 
             }).delegate('li', 'mouseenter', function () {
                 ul.find('.selected').removeClass('selected');
@@ -245,8 +251,7 @@
                 }).removeClass('selected');
 
             }).bind('scroll', function () {
-                clearTimeout(tmrScroll);
-                tmrScroll = setTimeout(function () { $this.trigger('focus'); }, 100);
+                $this.triggerHandler('focus');
             });
         });
     };
