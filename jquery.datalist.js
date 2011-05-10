@@ -22,7 +22,7 @@
 </select><!--<![endif]-->
 </datalist>
 */
-(function (window, $) {
+(function (window, $, undefined) {
     var document = window.document,
         native_support =
             !!('data' in document.createElement('datalist')) && //bye bye Opera
@@ -51,9 +51,9 @@
     }
 
     function zIndex() {
-        return $('*').map(function () {
+        return Math.max.apply(undefined, $('*').map(function () {
             return an($(this).css('z-index'));
-        }).get().max();
+        }).get());
     }
 
     function buildOptions($this, ul, opts) {
@@ -96,12 +96,12 @@
     }
 
     function position(elm, relativeTo, corner) {
-        var off = relativeTo.position();
+        var off = relativeTo.position(), z = zIndex();
         corner = corner || 'tl';
         elm.css({
             top: off.top + (corner.indexOf('b') > -1 ? relativeTo.outerHeight() : -1) + an(relativeTo.css('margin-top')),
             left: off.left + (corner.indexOf('r') > -1 ? relativeTo.outerWidth() : 0) + an(relativeTo.css('margin-left')),
-            'z-index': zIndex() + 100
+            'z-index': Math.max(z, 0) + 100
         });
     }
 
@@ -111,7 +111,7 @@
         //first test for native placeholder support before continuing
         return options.native_support ? this : this.each(function () {
             //local vars
-            var $this = $(this), lis, tmrHide,
+            var $this = $(this), lis, tmrHide, tmrScroll,
             //the main guts of the plugin
                 datalist = $(document.getElementById($this.attr('list'))),
                 opts = datalist.find('option'),
@@ -173,7 +173,8 @@
                     ul.show();
                 })
                 .blur(function () { $this.trigger('start-hide'); })
-                .bind('keyup search', function () {
+                .bind('keyup search', function (e) {
+                    if (e.keyCode && $.inArray(e.keyCode, [27, 10, 13, 38, 40]) > -1) return;
                     if (!ul.is(':visible')) $this.trigger('show-now');
                     clearTimeout(searchContext.tmr);
                     searchContext.tmr = setTimeout(function () {
@@ -244,7 +245,8 @@
                 }).removeClass('selected');
 
             }).bind('scroll', function () {
-                $this.trigger('focus');
+                clearTimeout(tmrScroll);
+                tmrScroll = setTimeout(function () { $this.trigger('focus'); }, 100);
             });
         });
     };
